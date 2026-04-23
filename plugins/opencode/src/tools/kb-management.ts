@@ -1,27 +1,22 @@
-import { ENTITIES_SCHEMA_URL, universeManager } from "@kb/core";
+import {
+  kbDoc,
+  kbEntitiesGet,
+  kbEntitiesSet,
+  kbEntityDelete,
+  kbIndex,
+  kbSearchBatch,
+  kbUniverseCreate,
+  kbUniverseDelete,
+  kbUniverseList,
+} from "@kb/core";
 import { tool, type ToolDefinition } from "@opencode-ai/plugin/tool";
-
-function getUniverseOrMessage(name: string) {
-  const universe = universeManager.getUniverse(name);
-  if (!universe) {
-    return `Universe '${name}' does not exist.`;
-  }
-
-  return universe;
-}
 
 export const kbManagementTools: Record<string, ToolDefinition> = {
   kb_universe_list: tool({
     description: "List all KB universes",
     args: {},
     async execute(_args, _context) {
-      const universes = universeManager.getUniverses().map((universe) => universe.name);
-
-      if (universes.length === 0) {
-        return "No universes found.";
-      }
-
-      return `Universes:\n${universes.map((name) => `- ${name}`).join("\n")}`;
+      return kbUniverseList();
     },
   }),
   kb_universe_create: tool({
@@ -30,13 +25,7 @@ export const kbManagementTools: Record<string, ToolDefinition> = {
       name: tool.schema.string().describe("Universe name to create"),
     },
     async execute(args, _context) {
-      const universeName = args.name.trim();
-      if (!universeName) {
-        return "Missing universe name.";
-      }
-
-      universeManager.createUniverse(universeName);
-      return `Created universe '${universeName}'.`;
+      return kbUniverseCreate(args.name);
     },
   }),
   kb_universe_delete: tool({
@@ -45,17 +34,7 @@ export const kbManagementTools: Record<string, ToolDefinition> = {
       name: tool.schema.string().describe("Universe name to delete"),
     },
     async execute(args, _context) {
-      const universeName = args.name.trim();
-      if (!universeName) {
-        return "Missing universe name.";
-      }
-
-      const deleted = universeManager.deleteUniverse(universeName);
-      if (!deleted) {
-        return `Universe '${universeName}' does not exist.`;
-      }
-
-      return `Deleted universe '${universeName}'.`;
+      return kbUniverseDelete(args.name);
     },
   }),
   kb_entities_get: tool({
@@ -64,64 +43,17 @@ export const kbManagementTools: Record<string, ToolDefinition> = {
       universe: tool.schema.string().describe("Universe name"),
     },
     async execute(args, _context) {
-      const universeName = args.universe.trim();
-      if (!universeName) {
-        return "Missing universe name.";
-      }
-
-      const universeOrMessage = getUniverseOrMessage(universeName);
-      if (typeof universeOrMessage === "string") {
-        return universeOrMessage;
-      }
-
-      const entities = universeOrMessage.getEntities();
-      return JSON.stringify(
-        {
-          schema: ENTITIES_SCHEMA_URL,
-          value: entities,
-        },
-        null,
-        2,
-      );
+      return kbEntitiesGet(args.universe);
     },
   }),
   kb_entities_set: tool({
     description: "Replace _meta/entities.json for a universe",
     args: {
       universe: tool.schema.string().describe("Universe name"),
-      entitiesJson: tool.schema
-        .string()
-        .describe("JSON array of entities or full entities file object"),
+      entitiesJson: tool.schema.string().describe("JSON array or full entities file object"),
     },
     async execute(args, _context) {
-      const universeName = args.universe.trim();
-      if (!universeName) {
-        return "Missing universe name.";
-      }
-
-      const universeOrMessage = getUniverseOrMessage(universeName);
-      if (typeof universeOrMessage === "string") {
-        return universeOrMessage;
-      }
-
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(args.entitiesJson);
-      } catch {
-        return "entitiesJson must be valid JSON.";
-      }
-
-      const nextEntities =
-        parsed && typeof parsed === "object" && "value" in parsed
-          ? (parsed as { value: unknown }).value
-          : parsed;
-
-      if (!Array.isArray(nextEntities)) {
-        return "entitiesJson must be an array of entities or an object with a 'value' array.";
-      }
-
-      universeOrMessage.setEntities(nextEntities);
-      return `Updated entities for '${universeName}' (${nextEntities.length} entries).`;
+      return kbEntitiesSet(args.universe, args.entitiesJson);
     },
   }),
   kb_entity_delete: tool({
@@ -131,28 +63,44 @@ export const kbManagementTools: Record<string, ToolDefinition> = {
       name: tool.schema.string().describe("Entity name to delete"),
     },
     async execute(args, _context) {
-      const universeName = args.universe.trim();
-      const entityName = args.name.trim();
-
-      if (!universeName) {
-        return "Missing universe name.";
-      }
-
-      if (!entityName) {
-        return "Missing entity name.";
-      }
-
-      const universeOrMessage = getUniverseOrMessage(universeName);
-      if (typeof universeOrMessage === "string") {
-        return universeOrMessage;
-      }
-
-      const deleted = universeOrMessage.deleteEntity(entityName);
-      if (!deleted) {
-        return `Entity '${entityName}' does not exist in universe '${universeName}'.`;
-      }
-
-      return `Deleted entity '${entityName}' from universe '${universeName}'.`;
+      return kbEntityDelete(args.universe, args.name);
+    },
+  }),
+  kb_index: tool({
+    description: "List entities by type, get stats, or rebuild manifest index",
+    args: {
+      universe: tool.schema.string().describe("Universe name"),
+      action: tool.schema.enum(["list", "stats", "rebuild"]).describe("Index action"),
+      type: tool.schema.string().optional().describe("Optional entity type filter"),
+    },
+    async execute(args, _context) {
+      return kbIndex(args);
+    },
+  }),
+  kb_search_batch: tool({
+    description: "Search many entity names in one filesystem scan",
+    args: {
+      universe: tool.schema.string().describe("Universe name"),
+      queries: tool.schema.string().describe("JSON array of { query, type? }"),
+      fuzzy: tool.schema.boolean().optional().describe("Enable fuzzy search (default true)"),
+    },
+    async execute(args, _context) {
+      return kbSearchBatch(args);
+    },
+  }),
+  kb_doc: tool({
+    description: "Validated Obsidian frontmatter write/edit tool",
+    args: {
+      universe: tool.schema.string().describe("Universe name"),
+      action: tool.schema
+        .enum(["upsert-entity", "write-entity", "regenerate-index", "verify"])
+        .describe("Document action"),
+      upsertData: tool.schema.string().optional().describe("JSON payload for upsert-entity"),
+      entityData: tool.schema.string().optional().describe("JSON payload for write-entity"),
+      path: tool.schema.string().optional().describe("Optional scope path for verify/regenerate-index"),
+    },
+    async execute(args, _context) {
+      return kbDoc(args);
     },
   }),
 };
