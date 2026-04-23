@@ -2,12 +2,26 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 
+const UNIVERSE_NAME_REGEX = /^[A-Za-z_-]+$/;
+
 export const kbConfigSchema = z.looseObject({
   kbDir: z
     .string()
     .min(1)
     .default("./kb")
     .describe("OS path to the root knowledge base directory."),
+  universes: z
+    .array(
+      z
+        .string()
+        .min(1)
+        .regex(
+          UNIVERSE_NAME_REGEX,
+          "Universe names must contain letters and may include '_' or '-'.",
+        ),
+    )
+    .default([])
+    .describe("List of individual knowledge base names."),
 });
 
 export type KbConfig = z.infer<typeof kbConfigSchema>;
