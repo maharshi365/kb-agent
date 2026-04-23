@@ -9,6 +9,7 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev --parallel",
+    "dev:core": "bun run --filter @kb/core dev",
     "check": "turbo run check",
     "typecheck": "turbo run typecheck"
   },
