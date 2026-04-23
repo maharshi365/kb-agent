@@ -11,10 +11,11 @@ Use this skill when the user wants to ingest source documents into a universe kn
 
 1. Process markdown from `_inbox`.
 2. Extract source-grounded entities from text.
-3. Merge into `_data` through validated write/edit operations.
+3. Merge into `_data` through validated tool operations.
 4. Regenerate indexes.
 5. Move processed source files into `_raw`.
 6. Run post-ingestion review for duplicates, dead links, and orphaned pages.
+7. Keep root orchestration thin and reusable across workflows.
 
 ## Tools to Use
 
@@ -39,25 +40,19 @@ Each universe uses:
 
 ## Orchestration Policy (Required)
 
-- You must use the `task` tool to orchestrate ingestion work.
-- The root ingestion agent acts as coordinator only: resolve universe, gather file list, launch subagents, and run final indexing/move/report steps.
-- Launch one subagent per source file in `_inbox/`.
-- Each per-file subagent must run as a KB ingestion worker (a fresh KB-agent-style execution for that file) and handle:
-  - reading the file,
-  - extracting grounded entities,
-  - one `kb_search_batch` for that file,
-  - `kb_doc` upserts for that file.
-- Do not batch multiple source files into the same subagent.
-- If a subagent fails for one file, continue with the remaining files and report per-file failures.
-- Dont try to start all the tasks in 1 go. Do them in batches
+- You must use `task` for ingestion execution.
+- Root context is coordinator-only: resolve universe, gather files, launch subtasks, aggregate results, run final indexing and archive steps.
+- Launch one subtask per source file in `_inbox/` (batched launches are fine; each subtask handles one file only).
+- Reuse the same KB workflow style used by other skills: focused subtask, bounded scope, explicit counters.
+- If one subtask fails, continue with remaining files and report per-file failures.
 
 ## Workflow
 
 1. Resolve target universe.
 2. Read `entities.json` for valid entity types and extraction focus.
 3. List markdown files in `_inbox/`. Stop if empty.
-4. Use `task` to launch one subagent per source file.
-5. Each subagent processes exactly one file:
+4. Use `task` to launch one subtask per source file.
+5. Each subtask processes exactly one file:
    - Read source markdown.
    - Extract candidate entities with direct evidence.
    - Use one `kb_search_batch` call for all candidates in that file.
@@ -74,7 +69,7 @@ Each universe uses:
 - After `kb_index` rebuild completes, launch a separate `task` invocation.
 - In that new task, request a KB review sweep for the same universe with a bounded count (default 25).
 - The review task must run fixes in this order: duplicates, dead links, orphaned pages.
-- Use the review skill
+- Use `kb-review` and include the ingestion run context in the prompt.
 
 ## Extraction Rules
 
@@ -93,3 +88,8 @@ Each universe uses:
 
 - Use `kb_search_batch` for lookups during ingestion.
 - Avoid repeated single-entity search calls for the same source file.
+
+## Execution Truthfulness
+
+- Track and report counts for writes attempted, writes succeeded, and writes failed.
+- Never describe planned or attempted writes as completed.
