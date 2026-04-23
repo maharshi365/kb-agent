@@ -19,9 +19,6 @@ export function buildKbAgentDef(): Record<string, unknown> {
     },
     permission: {
       "kb_*": "allow",
-      edit: "deny",
-      write: "deny",
-      apply_patch: "deny",
       skill: {
         "internal-*": "allow",
       },
