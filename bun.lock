@@ -23,6 +23,9 @@
     "plugins/opencode": {
       "name": "@kb/plugin-opencode",
       "version": "0.0.1",
+      "dependencies": {
+        "@kb/core": "workspace:*",
+      },
       "devDependencies": {
         "@opencode-ai/plugin": "^1.14.22",
       },

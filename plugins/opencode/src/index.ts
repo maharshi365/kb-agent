@@ -3,6 +3,7 @@ import { buildKbAgentDef } from "./agents/kb-agent";
 import { kbManagementTools } from "./tools/kb-management";
 
 type PluginConfig = {
+  permission?: Record<string, unknown>;
   agent?: Record<string, unknown>;
 };
 
@@ -13,28 +14,12 @@ const kbToolDenyPermissions: Record<string, string> = {
 const server: Plugin = async () => {
   return {
     config: async (config: PluginConfig) => {
+      config.permission = {
+        ...(config.permission ?? {}),
+        ...kbToolDenyPermissions,
+      };
+
       const agentDefs = config.agent ?? {};
-
-      for (const [agentName, agentDef] of Object.entries(agentDefs)) {
-        if (agentName === "kb-agent") {
-          continue;
-        }
-
-        if (!agentDef || typeof agentDef !== "object") {
-          continue;
-        }
-
-        const typedAgentDef = agentDef as Record<string, unknown>;
-        const existingPermission =
-          typedAgentDef.permission && typeof typedAgentDef.permission === "object"
-            ? (typedAgentDef.permission as Record<string, unknown>)
-            : {};
-
-        typedAgentDef.permission = {
-          ...existingPermission,
-          ...kbToolDenyPermissions,
-        };
-      }
 
       agentDefs["kb-agent"] = buildKbAgentDef();
       config.agent = agentDefs;

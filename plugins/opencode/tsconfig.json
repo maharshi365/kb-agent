@@ -4,12 +4,10 @@
     "src"
   ],
   "compilerOptions": {
+    "rootDir": "src",
     "outDir": "dist",
-    "baseUrl": "../..",
-    "paths": {
-      "@kb/core": [
-        "packages/core/src/index.ts"
-      ]
-    }
+    "types": [
+      "node"
+    ]
   }
 }

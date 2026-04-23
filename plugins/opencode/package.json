@@ -24,6 +24,9 @@
     "check": "tsc --noEmit",
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {
+    "@kb/core": "workspace:*"
+  },
   "devDependencies": {
     "@opencode-ai/plugin": "^1.14.22"
   }
