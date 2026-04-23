@@ -35,6 +35,12 @@ Ask these before generating entities when requirements are unclear:
 
 If the user cannot answer fully, propose a practical default entity set and ask for confirmation.
 
+Default evidence bar when unspecified:
+
+- Use direct quotes when possible.
+- If a direct quote is too long, use a tight excerpt (1-3 sentences) that preserves the original meaning.
+- Include enough surrounding context to verify the extracted fact without re-reading the full source.
+
 ## Entities JSON Contract
 
 Write entities as:
@@ -63,6 +69,21 @@ Validation expectations:
 - `examples` must contain at least one non-empty example.
 - `requiredEntities` must reference other existing entity names and cannot self-reference.
 - Keep entity names stable once adopted.
+
+## Evidence Quality Guidance
+
+When defining entity metadata, explain to the user what is "good enough" evidence for extraction:
+
+- `Good`: direct quote or tight excerpt that clearly supports the exact extracted fact.
+- `Good`: includes source-grounded wording (not a paraphrase that adds new claims).
+- `Good`: specific enough that a reviewer can validate the claim quickly.
+- `Not good`: vague snippets, summaries without source wording, or excerpts that do not prove the stated fact.
+
+Use this practical rule:
+
+- If a reviewer asks "where exactly does this claim come from?", the evidence should answer that in one read.
+
+When users ask for a looser standard, keep evidence minimally verifiable: at least one concrete source-grounded excerpt per extracted fact.
 
 ## Workflow
 

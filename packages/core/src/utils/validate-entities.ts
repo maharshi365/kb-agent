@@ -15,7 +15,7 @@ const entitySchema = z.object({
   description: nonEmptyStringSchema,
   extractionFocus: nonEmptyStringSchema,
   examples: z.array(nonEmptyStringSchema).min(1),
-  evidence: z.literal(EVIDENCE_INSTRUCTION).default(EVIDENCE_INSTRUCTION),
+  evidence: z.string().default(EVIDENCE_INSTRUCTION),
   rules: z.array(nonEmptyStringSchema).optional(),
   invalid: z.array(nonEmptyStringSchema).optional(),
   requiredEntities: z.array(nonEmptyStringSchema).optional(),
