@@ -12,6 +12,7 @@ Use this skill when the user wants to create a knowledge base, define or edit en
 1. Understand what kind of knowledge base the user is building.
 2. Produce a valid `_meta/entities.json` payload.
 3. Apply updates safely using KB tools.
+4. Optionally update Obsidian graph/search config files when explicitly requested.
 
 ## Tools to Use
 
@@ -21,6 +22,9 @@ Use this skill when the user wants to create a knowledge base, define or edit en
 - `kb_entities_get`
 - `kb_entities_set`
 - `kb_entity_delete`
+- `glob`
+- `read`
+- `edit`
 
 ## Required Discovery Questions
 
@@ -93,6 +97,31 @@ When users ask for a looser standard, keep evidence minimally verifiable: at lea
 4. Show proposed entities for user confirmation on substantial changes.
 5. Persist with `kb_entities_set`.
 6. Report what changed (added/updated/removed entities).
+
+## Optional Obsidian Config Edits
+
+When the user explicitly asks to adjust Obsidian graph colors or search behavior for a universe, handle it as an optional metadata task with strict file-presence guards.
+
+### Supported Targets
+
+- Obsidian config location for this project is under `_data/.obsidian/` inside the universe.
+- Graph colors: prefer `_data/.obsidian/graph.json`.
+- Search-related config: only edit a concrete file/path the user requested under `_data/.obsidian/` (or an existing known Obsidian config file there, such as `_data/.obsidian/workspace.json`).
+
+### Required Guardrails
+
+1. Check that the target file exists before editing.
+2. If the file does not exist, do nothing and report: `Skipped: <path> not present`.
+3. Never create missing Obsidian config files for this workflow.
+4. Preserve unknown JSON keys; apply minimal key-level edits only.
+5. If requested search behavior is ambiguous, only apply explicit, unambiguous key updates.
+
+### Suggested Sequence
+
+1. Resolve universe path.
+2. Verify file presence with `glob`/`read`.
+3. If present, apply targeted JSON edits.
+4. Report exact keys changed and skipped files.
 
 ## Editing Policy
 
