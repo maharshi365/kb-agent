@@ -13,4 +13,5 @@ export function getKbConfig(): KbConfig {
   return kbConfig;
 }
 
+export { Universe } from "./universe";
 export { kbConfigSchema, UniverseManager } from "./universe-manager";

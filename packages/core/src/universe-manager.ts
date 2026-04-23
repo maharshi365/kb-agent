@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { z } from "zod";
+import { Universe } from "./universe";
 import { getUserDataDir } from "./utils/get-user-data-dir";
 
 const KB_DIR_NAME = "kb-agent";
@@ -28,12 +29,13 @@ export class UniverseManager {
   public readonly kbRootDir: string;
   public readonly kbConfigPath: string;
   public readonly config: KbConfig;
+  public readonly universes: Universe[];
 
   public constructor() {
     this.kbRootDir = join(getUserDataDir(), KB_DIR_NAME);
     this.kbConfigPath = join(this.kbRootDir, KB_CONFIG_FILE_NAME);
     this.config = this.loadKbConfig();
-    this.ensureUniverseDirectories();
+    this.universes = this.loadUniverses();
   }
 
   private loadKbConfig(): KbConfig {
@@ -69,17 +71,19 @@ export class UniverseManager {
     }
   }
 
-  public ensureUniverseDirectories(): void {
+  private loadUniverses(): Universe[] {
     const kbRoot = resolve(this.kbRootDir);
 
     mkdirSync(kbRoot, { recursive: true });
 
-    for (const universe of this.config.universes) {
-      mkdirSync(resolve(kbRoot, universe), { recursive: true });
-    }
+    return this.config.universes.map((universeName) => new Universe(universeName, kbRoot));
   }
 
   public getKbConfig(): KbConfig {
     return this.config;
+  }
+
+  public getUniverse(name: string): Universe | undefined {
+    return this.universes.find((universe) => universe.name === name);
   }
 }
