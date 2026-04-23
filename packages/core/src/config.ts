@@ -2,11 +2,13 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 
-export const kbConfigSchema = z
-  .object({
-    kbDir: z.string().min(1).default("./kb"),
-  })
-  .passthrough();
+export const kbConfigSchema = z.looseObject({
+  kbDir: z
+    .string()
+    .min(1)
+    .default("./kb")
+    .describe("OS path to the root knowledge base directory."),
+});
 
 export type KbConfig = z.infer<typeof kbConfigSchema>;
 
