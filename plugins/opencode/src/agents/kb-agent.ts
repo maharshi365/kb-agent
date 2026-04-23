@@ -1,6 +1,8 @@
-import { kbAgentPrompt } from "@kb/core";
+import { kbAgentPrompt, universeManager } from "@kb/core";
 
 export function buildKbAgentDef(): Record<string, unknown> {
+  const kbRootDir = universeManager.kbRootDir.replace(/\\/g, "/").replace(/\/+$/, "");
+
   return {
     description: "Manage knowledge base universes and content.",
     mode: "all",
@@ -19,6 +21,22 @@ export function buildKbAgentDef(): Record<string, unknown> {
     },
     permission: {
       "kb_*": "allow",
+      read: {
+        [kbRootDir]: "allow",
+        [`${kbRootDir}/**`]: "allow",
+      },
+      glob: {
+        [kbRootDir]: "allow",
+        [`${kbRootDir}/**`]: "allow",
+      },
+      grep: {
+        [kbRootDir]: "allow",
+        [`${kbRootDir}/**`]: "allow",
+      },
+      external_directory: {
+        [kbRootDir]: "allow",
+        [`${kbRootDir}/**`]: "allow",
+      },
       skill: {
         "internal-*": "allow",
       },

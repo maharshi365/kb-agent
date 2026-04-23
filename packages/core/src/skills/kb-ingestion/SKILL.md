@@ -49,6 +49,7 @@ Each universe uses:
   - `kb_doc` upserts for that file.
 - Do not batch multiple source files into the same subagent.
 - If a subagent fails for one file, continue with the remaining files and report per-file failures.
+- Dont try to start all the tasks in 1 go. Do them in batches
 
 ## Workflow
 
