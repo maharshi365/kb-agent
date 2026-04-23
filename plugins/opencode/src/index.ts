@@ -1,5 +1,6 @@
 import { universeManager } from "@kb/core";
 import type { Plugin } from "@opencode-ai/plugin";
+import { tool } from "@opencode-ai/plugin/tool";
 
 function getUsageMessage(): string {
   return [
@@ -58,21 +59,37 @@ function handleUniverseCommand(args: string[]): string {
   return `Unknown subcommand '${action}'.\n\n${getUsageMessage()}`;
 }
 
-export const KbUniversePlugin: Plugin = async () => {
+const server: Plugin = async () => {
   return {
-    "command.execute.before": async (input, output) => {
-      if (input.command !== "kb-universe") {
-        return;
-      }
+    config: async (config) => {
+      const next = config as Record<string, unknown>;
+      const command = (next.command as Record<string, unknown> | undefined) ?? {};
 
-      try {
-        output.parts = [
-          { type: "text", text: handleUniverseCommand(parseArguments(input.arguments)) } as never,
-        ];
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Unknown error.";
-        output.parts = [{ type: "text", text: `kb-universe failed: ${message}` } as never];
-      }
+      command["kb-universe"] = {
+        description: "Manage KB universes",
+        template:
+          'Use the "kb_universe" tool to run: "$ARGUMENTS". Return only the tool output text.',
+      };
+
+      next.command = command;
+    },
+    tool: {
+      kb_universe: tool({
+        description: "Manage KB universes: list, add <name>, remove <name>",
+        args: {
+          input: tool.schema
+            .string()
+            .describe("Arguments after /kb-universe, for example: list, add demo, remove demo"),
+        },
+        async execute(args) {
+          return handleUniverseCommand(parseArguments(args.input));
+        },
+      }),
     },
   };
+};
+
+export default {
+  id: "@kb/plugin-opencode",
+  server,
 };

@@ -7,6 +7,9 @@
     ".": {
       "default": "./dist/index.js"
     },
+    "./server": {
+      "default": "./dist/index.js"
+    },
     "./tui": {
       "default": "./dist/tui.js"
     }
