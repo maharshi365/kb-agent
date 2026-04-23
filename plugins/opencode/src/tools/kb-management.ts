@@ -70,8 +70,11 @@ export const kbManagementTools: Record<string, ToolDefinition> = {
     description: "List entities by type, get stats, or rebuild manifest index",
     args: {
       universe: tool.schema.string().describe("Universe name"),
-      action: tool.schema.enum(["list", "stats", "rebuild"]).describe("Index action"),
+      action: tool.schema
+        .enum(["list", "stats", "rebuild", "duplicates", "dead-links", "orphaned-pages"])
+        .describe("Index action"),
       type: tool.schema.string().optional().describe("Optional entity type filter"),
+      limit: tool.schema.number().optional().describe("Optional result cap for diagnostic actions"),
     },
     async execute(args, _context) {
       return kbIndex(args);

@@ -14,6 +14,7 @@ Use this skill when the user wants to ingest source documents into a universe kn
 3. Merge into `_data` through validated write/edit operations.
 4. Regenerate indexes.
 5. Move processed source files into `_raw`.
+6. Run post-ingestion review for duplicates, dead links, and orphaned pages.
 
 ## Tools to Use
 
@@ -64,7 +65,15 @@ Each universe uses:
 7. After all files are processed, call `kb_doc` action `regenerate-index`.
 8. Move successfully processed files from `_inbox/` to `_raw/` using system mv commands.
 9. Call `kb_index` action `rebuild`.
-10. Report created/updated counts, per-file outcomes, failures, and index stats.
+10. Launch a new `task` for post-ingestion review that activates `kb-review` for the same universe.
+11. Report created/updated counts, per-file outcomes, failures, index stats, and review outcomes.
+
+## Post-Ingestion Review Task (Required)
+
+- After `kb_index` rebuild completes, launch a separate `task` invocation.
+- In that new task, request a KB review sweep for the same universe with a bounded count (default 25).
+- The review task must run fixes in this order: duplicates, dead links, orphaned pages.
+- Use the review skill
 
 ## Extraction Rules
 

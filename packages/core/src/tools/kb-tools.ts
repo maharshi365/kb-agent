@@ -42,6 +42,14 @@ type ParsedEntity = {
   updated: string;
 };
 
+type IndexedPage = {
+  name: string;
+  nameKey: string;
+  entityType: string;
+  path: string;
+  links: string[];
+};
+
 function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -299,6 +307,62 @@ function getManifestPath(dataDir: string): string {
   return join(dataDir, "_manifest.json");
 }
 
+function normalizeLinkTarget(rawTarget: string): string {
+  const target = rawTarget.trim().split("|")[0]?.split("#")[0]?.trim() ?? "";
+  return target;
+}
+
+function extractWikilinkTargets(content: string): string[] {
+  const matches = content.matchAll(/\[\[([^\]]+)\]\]/g);
+  const targets = Array.from(matches)
+    .map((match) => normalizeLinkTarget(match[1] ?? ""))
+    .filter(Boolean);
+  return unique(targets);
+}
+
+function collectPageLinks(raw: string, parsed: ParsedEntity | null): string[] {
+  const split = splitFrontmatter(raw);
+  const bodyLinks = extractWikilinkTargets(split?.body ?? raw);
+  const relatedLinks = Object.values(parsed?.related ?? {})
+    .flat()
+    .flatMap((value) => extractWikilinkTargets(value));
+  return unique([...bodyLinks, ...relatedLinks]);
+}
+
+function collectIndexedPages(universeDir: string): IndexedPage[] {
+  const dataDir = join(universeDir, "_data");
+  const pages: IndexedPage[] = [];
+
+  for (const entityType of getTypeDirectories(dataDir)) {
+    const typeDir = join(dataDir, entityType);
+    for (const fileName of getEntityFiles(typeDir)) {
+      const absoluteFilePath = join(typeDir, fileName);
+      const raw = readFileSync(absoluteFilePath, "utf-8");
+      const parsed = parseEntityFrontmatter(raw);
+      const name = parsed?.name?.trim() || basename(fileName, ".md");
+      const links = collectPageLinks(raw, parsed);
+
+      pages.push({
+        name,
+        nameKey: name.toLowerCase(),
+        entityType,
+        path: relative(universeDir, absoluteFilePath).replace(/\\/g, "/"),
+        links,
+      });
+    }
+  }
+
+  return pages;
+}
+
+function normalizeLimit(limit?: number): number {
+  if (!Number.isFinite(limit)) {
+    return 25;
+  }
+
+  return Math.max(1, Math.min(200, Math.floor(limit ?? 25)));
+}
+
 function buildManifest(universeName: string, universeDir: string): Manifest {
   const dataDir = join(universeDir, "_data");
   const byType: Record<string, number> = {};
@@ -523,7 +587,12 @@ export function kbEntityDelete(universe: string, name: string): string {
   return `Deleted entity '${entityName}' from universe '${universeName}'.`;
 }
 
-export function kbIndex(args: { universe: string; action: "list" | "stats" | "rebuild"; type?: string }): string {
+export function kbIndex(args: {
+  universe: string;
+  action: "list" | "stats" | "rebuild" | "duplicates" | "dead-links" | "orphaned-pages";
+  type?: string;
+  limit?: number;
+}): string {
   const universeName = args.universe.trim();
   if (!universeName) {
     return "Missing universe name.";
@@ -544,6 +613,127 @@ export function kbIndex(args: { universe: string; action: "list" | "stats" | "re
           return built;
         })()
       : getOrBuildManifest(universeOrMessage.name, universeOrMessage.dir);
+
+  if (args.action === "duplicates" || args.action === "dead-links" || args.action === "orphaned-pages") {
+    const pages = collectIndexedPages(universeOrMessage.dir);
+    const limited = normalizeLimit(args.limit);
+
+    if (args.action === "duplicates") {
+      const grouped = new Map<string, IndexedPage[]>();
+      for (const page of pages) {
+        const group = grouped.get(page.nameKey) ?? [];
+        group.push(page);
+        grouped.set(page.nameKey, group);
+      }
+
+      const allIssues = Array.from(grouped.entries())
+        .filter(([, entries]) => entries.length > 1)
+        .map(([, entries]) => ({
+          name: entries[0].name,
+          count: entries.length,
+          paths: entries.map((entry) => entry.path).sort((a, b) => a.localeCompare(b)),
+        }))
+        .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+
+      const issues = allIssues.slice(0, limited);
+      return JSON.stringify(
+        {
+          action: "duplicates",
+          universe: universeName,
+          scannedPages: pages.length,
+          totalIssues: allIssues.length,
+          returned: issues.length,
+          limit: limited,
+          truncated: allIssues.length > issues.length,
+          issues,
+        },
+        null,
+        2,
+      );
+    }
+
+    const pagesByName = new Set(pages.map((page) => page.nameKey));
+    const inboundCounts = new Map<string, number>();
+    for (const page of pages) {
+      inboundCounts.set(page.path, 0);
+    }
+
+    for (const page of pages) {
+      for (const rawTarget of page.links) {
+        const targetKey = rawTarget.toLowerCase();
+        if (!pagesByName.has(targetKey)) {
+          continue;
+        }
+
+        for (const targetPage of pages) {
+          if (targetPage.nameKey !== targetKey) {
+            continue;
+          }
+
+          inboundCounts.set(targetPage.path, (inboundCounts.get(targetPage.path) ?? 0) + 1);
+        }
+      }
+    }
+
+    if (args.action === "dead-links") {
+      const allIssues = pages
+        .flatMap((page) =>
+          page.links
+            .filter((target) => !pagesByName.has(target.toLowerCase()))
+            .map((target) => ({
+              sourceName: page.name,
+              sourcePath: page.path,
+              target,
+            })),
+        )
+        .sort(
+          (a, b) =>
+            a.sourcePath.localeCompare(b.sourcePath) ||
+            a.target.localeCompare(b.target),
+        );
+
+      const issues = allIssues.slice(0, limited);
+      return JSON.stringify(
+        {
+          action: "dead-links",
+          universe: universeName,
+          scannedPages: pages.length,
+          totalIssues: allIssues.length,
+          returned: issues.length,
+          limit: limited,
+          truncated: allIssues.length > issues.length,
+          issues,
+        },
+        null,
+        2,
+      );
+    }
+
+    const allIssues = pages
+      .filter((page) => (inboundCounts.get(page.path) ?? 0) === 0 && page.links.length === 0)
+      .map((page) => ({
+        name: page.name,
+        entityType: page.entityType,
+        path: page.path,
+      }))
+      .sort((a, b) => a.path.localeCompare(b.path));
+
+    const issues = allIssues.slice(0, limited);
+    return JSON.stringify(
+      {
+        action: "orphaned-pages",
+        universe: universeName,
+        scannedPages: pages.length,
+        totalIssues: allIssues.length,
+        returned: issues.length,
+        limit: limited,
+        truncated: allIssues.length > issues.length,
+        issues,
+      },
+      null,
+      2,
+    );
+  }
 
   if (args.action === "stats") {
     const sourceSet = new Set<string>();
