@@ -1,4 +1,9 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { join, resolve } from "node:path";
 import { z } from "zod";
 import { Universe } from "./universe";
@@ -29,7 +34,7 @@ export class UniverseManager {
   public readonly kbRootDir: string;
   public readonly kbConfigPath: string;
   public readonly config: KbConfig;
-  public readonly universes: Universe[];
+  public readonly universes: Map<string, Universe>;
 
   public constructor() {
     this.kbRootDir = join(getUserDataDir(), KB_DIR_NAME);
@@ -71,12 +76,29 @@ export class UniverseManager {
     }
   }
 
-  private loadUniverses(): Universe[] {
+  private loadUniverses(): Map<string, Universe> {
     const kbRoot = resolve(this.kbRootDir);
 
     mkdirSync(kbRoot, { recursive: true });
 
-    return this.config.universes.map((universeName) => new Universe(universeName, kbRoot));
+    return new Map(
+      this.config.universes.map((universeName) => [
+        universeName,
+        new Universe(universeName, kbRoot),
+      ]),
+    );
+  }
+
+  private saveKbConfig(): void {
+    writeFileSync(this.kbConfigPath, `${JSON.stringify(this.config, null, 2)}\n`, "utf-8");
+  }
+
+  private validateUniverseName(name: string): void {
+    if (!UNIVERSE_NAME_REGEX.test(name)) {
+      throw new Error(
+        "Universe names must contain letters and may include '_' or '-'.",
+      );
+    }
   }
 
   public getKbConfig(): KbConfig {
@@ -84,6 +106,42 @@ export class UniverseManager {
   }
 
   public getUniverse(name: string): Universe | undefined {
-    return this.universes.find((universe) => universe.name === name);
+    return this.universes.get(name);
+  }
+
+  public getUniverses(): Universe[] {
+    return [...this.universes.values()];
+  }
+
+  public createUniverse(name: string): Universe {
+    this.validateUniverseName(name);
+
+    const existingUniverse = this.getUniverse(name);
+    if (existingUniverse) {
+      throw new Error(`Universe '${name}' already exists.`);
+    }
+
+    const universe = new Universe(name, resolve(this.kbRootDir));
+    this.universes.set(name, universe);
+    this.config.universes.push(name);
+    this.saveKbConfig();
+
+    return universe;
+  }
+
+  public deleteUniverse(name: string): boolean {
+    const universe = this.universes.get(name);
+    if (!universe) {
+      return false;
+    }
+
+    universe.delete();
+    this.universes.delete(name);
+    this.config.universes = this.config.universes.filter(
+      (universeName) => universeName !== name,
+    );
+    this.saveKbConfig();
+
+    return true;
   }
 }

@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { mkdirSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const REQUIRED_UNIVERSE_DIRS = ["_meta", "_inbox", "_raw", "_data"] as const;
@@ -19,5 +19,9 @@ export class Universe {
     for (const dirname of REQUIRED_UNIVERSE_DIRS) {
       mkdirSync(join(this.dir, dirname), { recursive: true });
     }
+  }
+
+  public delete(): void {
+    rmSync(this.dir, { recursive: true, force: true });
   }
 }
