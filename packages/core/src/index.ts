@@ -16,3 +16,4 @@ export function getKbConfig(): KbConfig {
 export { Universe } from "./universe";
 export { kbConfigSchema, UniverseManager } from "./universe-manager";
 export { PROMPT as kbAgentPrompt } from "./agents/kb-agent";
+export { ENTITIES_SCHEMA_URL, EVIDENCE_INSTRUCTION } from "./utils/validate-entities";

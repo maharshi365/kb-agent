@@ -9,9 +9,16 @@ export function buildKbAgentDef(): Record<string, unknown> {
     tools: {
       kb_universe_list: true,
       kb_universe_create: true,
+      kb_universe_delete: true,
+      kb_entities_get: true,
+      kb_entities_set: true,
+      kb_entity_delete: true,
     },
     permission: {
       "kb_*": "allow",
+      skill: {
+        "internal-*": "allow",
+      },
     },
     prompt: kbAgentPrompt,
   };

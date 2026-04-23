@@ -93,6 +93,37 @@ export class Universe {
     return nextEntitiesFile.value[entityIndex];
   }
 
+  public getEntities(): UniverseEntity[] {
+    return this.readEntitiesFile().value;
+  }
+
+  public setEntities(entities: UniverseEntity[]): UniverseEntity[] {
+    const nextEntitiesFile = entitiesFileZodSchema.parse({
+      schema: ENTITIES_SCHEMA_URL,
+      value: entities,
+    });
+
+    this.writeEntitiesFile(nextEntitiesFile);
+    return nextEntitiesFile.value;
+  }
+
+  public deleteEntity(name: string): boolean {
+    const entitiesFile = this.readEntitiesFile();
+    const nextValue = entitiesFile.value.filter((entity) => entity.name !== name);
+
+    if (nextValue.length === entitiesFile.value.length) {
+      return false;
+    }
+
+    const nextEntitiesFile = entitiesFileZodSchema.parse({
+      ...entitiesFile,
+      value: nextValue,
+    });
+
+    this.writeEntitiesFile(nextEntitiesFile);
+    return true;
+  }
+
   private ensureMetaFiles(): void {
     const metaDir = join(this.dir, META_DIR_NAME);
     const entitiesPath = join(metaDir, ENTITIES_FILE_NAME);
