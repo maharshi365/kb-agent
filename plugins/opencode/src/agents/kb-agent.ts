@@ -2,6 +2,15 @@ import { kbAgentPrompt, universeManager } from "@kb/core";
 
 export function buildKbAgentDef(): Record<string, unknown> {
   const kbRootDir = universeManager.kbRootDir.replace(/\\/g, "/").replace(/\/+$/, "");
+  const kbRootDirWindows = kbRootDir.replace(/\//g, "\\");
+  const kbPathRules = {
+    [kbRootDir]: "allow",
+    [`${kbRootDir}/*`]: "allow",
+    [`${kbRootDir}/**`]: "allow",
+    [kbRootDirWindows]: "allow",
+    [`${kbRootDirWindows}\\*`]: "allow",
+    [`${kbRootDirWindows}\\**`]: "allow",
+  };
 
   return {
     description: "Manage knowledge base universes and content.",
@@ -21,22 +30,8 @@ export function buildKbAgentDef(): Record<string, unknown> {
     },
     permission: {
       "kb_*": "allow",
-      read: {
-        [kbRootDir]: "allow",
-        [`${kbRootDir}/**`]: "allow",
-      },
-      glob: {
-        [kbRootDir]: "allow",
-        [`${kbRootDir}/**`]: "allow",
-      },
-      grep: {
-        [kbRootDir]: "allow",
-        [`${kbRootDir}/**`]: "allow",
-      },
-      external_directory: {
-        [kbRootDir]: "allow",
-        [`${kbRootDir}/**`]: "allow",
-      },
+      read: kbPathRules,
+      external_directory: kbPathRules,
       skill: {
         "internal-*": "allow",
       },
