@@ -20,7 +20,9 @@ Use this skill when the user asks for QA auditing, hallucination checks, unsuppo
 - `kb_universe_list`
 - `kb_index`
 - `kb_search_batch`
-- `kb_doc`
+- `kb_entity_upsert`
+- `kb_entity_write`
+- `kb_verify`
 - `read`
 - `glob`
 - `task`
@@ -47,7 +49,7 @@ Use this skill when the user asks for QA auditing, hallucination checks, unsuppo
 - Unsupported claim removal is always Tier 2.
 - Never claim applied fixes without successful writes.
 - Always report attempted/succeeded/failed counts.
-- If `kb_doc write-entity` is used, require `entityData.frontmatter` + `entityData.body` (never `entityData.content`) and verify non-empty body before reporting success.
+- If `kb_entity_write` is used, require `entityData.frontmatter` + `entityData.body` (never `entityData.content`) and verify non-empty body before reporting success.
 
 ## Workflow
 
@@ -69,7 +71,7 @@ Use this skill when the user asks for QA auditing, hallucination checks, unsuppo
 8. Build improvement plan:
    - PARTIAL -> Tier 1 additions,
    - MISSING/WRONG/HALLUCINATED -> Tier 2 proposals.
-9. Apply Tier 1 via `kb_doc`, verify touched pages with `kb_doc` action `verify`.
+9. Apply Tier 1 via split KB write tools, verify touched pages with `kb_verify`.
 10. Return structured report with entity profile, score table, negative signals, and proposals.
 
 ## Negative Signals to Check

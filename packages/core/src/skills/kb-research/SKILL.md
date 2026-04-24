@@ -19,7 +19,9 @@ Use this skill when the user asks questions about facts, entities, relationships
 - `kb_universe_list`
 - `kb_index`
 - `kb_search_batch`
-- `kb_doc`
+- `kb_entity_upsert`
+- `kb_entity_write`
+- `kb_verify`
 - `read`
 - `glob`
 - `task` (required)
@@ -57,7 +59,7 @@ Use this skill when the user asks questions about facts, entities, relationships
    - confidence,
    - friction level (low/medium/high) with reason.
 8. If friction suggests structural gaps, apply or propose improvements:
-   - Tier 1: apply minimal safe edits via `kb_doc`.
+   - Tier 1: apply minimal safe edits via split KB write tools.
    - Tier 2: report proposals; apply only when `approveTier2=true`.
 
 ## Friction Heuristics
@@ -71,9 +73,9 @@ Use this skill when the user asks questions about facts, entities, relationships
 - Keep retrieval focused; do not scan the entire KB unless required.
 - Prefer `kb_search_batch` over repeated single lookups.
 - Preserve provenance and never remove evidence without explicit approval.
-- Prefer `kb_doc upsert-entity` for additive fixes.
-- If `kb_doc write-entity` is required, `entityData` must include `frontmatter` and `body` (never `content`).
-- Do not report success until post-write `kb_doc verify` (or readback) confirms body is non-empty.
+- Prefer `kb_entity_upsert` for additive fixes.
+- If `kb_entity_write` is required, `entityData` must include `frontmatter` and `body` (never `content`).
+- Do not report success until post-write `kb_verify` (or readback) confirms body is non-empty.
 - For large maintenance discovered during Q&A, open a follow-up task using `kb-review` or `kb-audit`.
 
 ## Response Contract

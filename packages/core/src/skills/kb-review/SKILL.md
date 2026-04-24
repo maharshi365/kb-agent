@@ -19,7 +19,10 @@ Use this skill when the user asks to review or heal KB graph quality issues.
 
 - `kb_index`
 - `kb_search_batch`
-- `kb_doc`
+- `kb_entity_write`
+- `kb_entity_merge`
+- `kb_verify`
+- `kb_index_regenerate`
 - `task`
 - `read`
 - `glob`
@@ -61,8 +64,8 @@ Do not skip ahead unless the earlier stage reports zero issues.
 2. Run `kb_index` action `duplicates` with `limit=count`.
 3. For each duplicate group, resolve conservatively:
     - Prefer one canonical node based on richer sources/evidence.
-    - Tier 1 default: normalize links to canonical node and preserve both pages.
-    - Tier 2 optional: remove superseded page only with explicit approval.
+    - Tier 1 default: Use `kb_entity_merge`. This blindly combines frontmatter/body and automatically rewrites all references. After the merge, use `kb_entity_write` to clean up the combined file.
+    - Tier 2 optional: manual deletion of superseded pages should only happen with explicit approval. `kb_entity_merge` already deletes the source file by default.
 4. Re-run `duplicates` to confirm reduction.
 5. Run `kb_index` action `dead-links` with `limit=count`.
 6. For each dead link:
@@ -80,9 +83,9 @@ Do not skip ahead unless the earlier stage reports zero issues.
 ## Guardrails
 
 - Prefer minimal, reversible edits first.
-- Keep frontmatter valid via `kb_doc` writes.
-- If using `kb_doc` write-entity, send `entityData.frontmatter` + `entityData.body` only (never `entityData.content`).
-- Require post-write `kb_doc verify` for touched files before claiming a fix succeeded.
+- Keep frontmatter valid via split KB write tools.
+- If using `kb_entity_write`, send `entityData.frontmatter` + `entityData.body` only (never `entityData.content`).
+- Require post-write `kb_verify` for touched files before claiming a fix succeeded.
 - Preserve evidence and source provenance while merging.
 - Never delete first: create or update replacement content and links before deleting old pages.
 - If an item cannot be safely auto-fixed, report it explicitly with reason.

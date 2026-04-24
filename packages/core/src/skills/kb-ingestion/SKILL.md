@@ -23,7 +23,10 @@ Use this skill when the user wants to ingest source documents into a universe kn
 - `kb_entities_get`
 - `kb_index`
 - `kb_search_batch`
-- `kb_doc`
+- `kb_entity_upsert`
+- `kb_entity_write`
+- `kb_verify`
+- `kb_index_regenerate`
 - `task` (required for orchestration)
 - `read`
 - `glob`
@@ -60,9 +63,9 @@ Each universe uses:
    - Read source markdown.
    - Extract candidate entities with direct evidence.
    - Use one `kb_search_batch` call for all candidates in that file.
-   - For each candidate, call `kb_doc` action `upsert-entity`.
+   - For each candidate, call `kb_entity_upsert`.
 6. Aggregate subagent results (success/failure and per-file write counts).
-7. After all files are processed, call `kb_doc` action `regenerate-index`.
+7. After all files are processed, call `kb_index_regenerate`.
 8. Move successfully processed files from `_inbox/` to `_raw/` using system mv commands.
 9. Call `kb_index` action `rebuild`.
 10. Launch a new `task` for post-ingestion review using `subagent_type: kb-reviewer` for the same universe.
@@ -99,7 +102,7 @@ source_file: <absolute-path>
 Requirements:
 - Process only this file. Do not read/process any other inbox file.
 - Read the source markdown, extract grounded entities, and run one kb_search_batch for all candidates in this file.
-- Upsert entities via kb_doc only.
+- Upsert entities via `kb_entity_upsert`.
 - Return counters: writes_attempted, writes_succeeded, writes_failed, created, updated, failed_entities.
 ```
 
@@ -120,9 +123,9 @@ Requirements:
 ## Write Rules
 
 - Do not write entity markdown directly with edit/write tools.
-- Use `kb_doc` for all entity and index writes.
-- If `kb_doc` returns validation errors, fix payload and retry.
-- For `kb_doc write-entity`, use `entityData.frontmatter` + `entityData.body`; never send `entityData.content`.
+- Use split write tools for entity/index operations (`kb_entity_upsert`, `kb_entity_write`, `kb_index_regenerate`, `kb_verify`).
+- If a write tool returns validation errors, fix payload and retry.
+- For `kb_entity_write`, use `entityData.frontmatter` + `entityData.body`; never send `entityData.content`.
 - Never mark a file as successfully processed until write success and non-empty body verification both pass.
 
 ## Batch Matching Policy

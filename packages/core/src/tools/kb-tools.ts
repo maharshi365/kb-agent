@@ -3,6 +3,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
@@ -59,6 +60,10 @@ type BodySignals = {
 };
 
 const MIN_ENTITY_BODY_CHARS = 40;
+
+function escapeRegExp(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -1008,14 +1013,58 @@ export function kbSearchBatch(args: { universe: string; queries: string; fuzzy?:
   );
 }
 
-export function kbDoc(args: {
+type KbDocActionArgs = {
   universe: string;
-  action: "upsert-entity" | "write-entity" | "regenerate-index" | "verify";
+  action: "upsert-entity" | "write-entity" | "regenerate-index" | "verify" | "merge-entities";
   upsertData?: string;
   entityData?: string;
   path?: string;
-  allowEmptyBody?: boolean;
-}): string {
+  sourcePath?: string;
+  targetPath?: string;
+};
+
+export function kbEntityUpsert(args: { universe: string; upsertData: string }): string {
+  return runKbDocAction({
+    universe: args.universe,
+    action: "upsert-entity",
+    upsertData: args.upsertData,
+  });
+}
+
+export function kbEntityWrite(args: { universe: string; entityData: string }): string {
+  return runKbDocAction({
+    universe: args.universe,
+    action: "write-entity",
+    entityData: args.entityData,
+  });
+}
+
+export function kbEntityMerge(args: { universe: string; sourcePath: string; targetPath: string }): string {
+  return runKbDocAction({
+    universe: args.universe,
+    action: "merge-entities",
+    sourcePath: args.sourcePath,
+    targetPath: args.targetPath,
+  });
+}
+
+export function kbIndexRegenerate(args: { universe: string; path?: string }): string {
+  return runKbDocAction({
+    universe: args.universe,
+    action: "regenerate-index",
+    path: args.path,
+  });
+}
+
+export function kbVerify(args: { universe: string; path?: string }): string {
+  return runKbDocAction({
+    universe: args.universe,
+    action: "verify",
+    path: args.path,
+  });
+}
+
+function runKbDocAction(args: KbDocActionArgs): string {
   const universeName = args.universe.trim();
   if (!universeName) {
     return "Missing universe name.";
@@ -1030,6 +1079,116 @@ export function kbDoc(args: {
   const validTypes = new Set(universeEntities.map((entity) => entity.name));
   const requiredRelatedByType = buildRequiredRelatedByType(universeEntities);
   const dataDir = join(universeOrMessage.dir, "_data");
+
+  if (args.action === "merge-entities") {
+    if (!args.sourcePath || !args.targetPath) {
+      return JSON.stringify({ success: false, code: "E_MERGE_ARGS", error: "sourcePath and targetPath are required for merge-entities" }, null, 2);
+    }
+
+    const sourceAbs = safeUniversePath(universeOrMessage.dir, args.sourcePath);
+    const targetAbs = safeUniversePath(universeOrMessage.dir, args.targetPath);
+
+    if (!sourceAbs || !targetAbs) {
+      return JSON.stringify({ success: false, code: "E_MERGE_PATHS", error: "Invalid source or target paths" }, null, 2);
+    }
+
+    if (sourceAbs === targetAbs) {
+      return JSON.stringify({ success: false, code: "E_MERGE_SAME", error: "Source and target cannot be the same file" }, null, 2);
+    }
+
+    if (!existsSync(sourceAbs)) {
+      return JSON.stringify({ success: false, code: "E_MERGE_SOURCE_MISSING", error: "Source file not found: " + args.sourcePath }, null, 2);
+    }
+    if (!existsSync(targetAbs)) {
+      return JSON.stringify({ success: false, code: "E_MERGE_TARGET_MISSING", error: "Target file not found: " + args.targetPath }, null, 2);
+    }
+
+    const sourceRaw = readFileSync(sourceAbs, "utf-8");
+    const sourceParsed = parseEntityFrontmatter(sourceRaw);
+    const sourceSplit = splitFrontmatter(sourceRaw);
+
+    const targetRaw = readFileSync(targetAbs, "utf-8");
+    const targetParsed = parseEntityFrontmatter(targetRaw);
+    const targetSplit = splitFrontmatter(targetRaw);
+
+    if (!sourceParsed || !sourceSplit || !targetParsed || !targetSplit) {
+      return JSON.stringify({ success: false, code: "E_MERGE_PARSE", error: "Could not parse source or target files" }, null, 2);
+    }
+
+    const oldName = sourceParsed.name;
+    const newName = targetParsed.name;
+
+    // 1. Merge frontmatter
+    targetParsed.aliases = unique([...targetParsed.aliases, ...sourceParsed.aliases, oldName].filter(a => a !== newName));
+    targetParsed.sources = unique([...targetParsed.sources, ...sourceParsed.sources]);
+    for (const [rType, rLinks] of Object.entries(sourceParsed.related)) {
+      targetParsed.related[rType] = unique([...(targetParsed.related[rType] ?? []), ...rLinks]);
+    }
+
+    // Remove self-references
+    for (const rType of Object.keys(targetParsed.related)) {
+      targetParsed.related[rType] = targetParsed.related[rType].filter(
+         link => link !== `[[${newName}]]` && !link.startsWith(`[[${newName}|`)
+      );
+      if (targetParsed.related[rType].length === 0) delete targetParsed.related[rType];
+    }
+    targetParsed.updated = today();
+
+    // 2. Validate Target Frontmatter
+    const issues = [
+      ...validateFrontmatter(targetParsed, validTypes),
+      ...validateRequiredRelationships(targetParsed, requiredRelatedByType),
+    ];
+
+    if (issues.some(i => i.severity === "error")) {
+       return JSON.stringify({ success: false, code: "E_MERGE_VALIDATION", error: "Merged frontmatter is invalid", errors: issues }, null, 2);
+    }
+
+    // 3. Blind Combine Body
+    const combinedBody = targetSplit.body.trimEnd() +
+      `\n\n## [Merged Content from ${oldName}]\n\n` +
+      sourceSplit.body.trim();
+
+    const mergedContent = `${renderEntityFrontmatter(targetParsed)}\n${combinedBody}\n`;
+    writeFileSync(targetAbs, mergedContent, "utf-8");
+
+    // 4. Rewrite References
+    let referencesRewritten = 0;
+    const linkRegex = new RegExp(`\\[\\[${escapeRegExp(oldName)}(\\|[^\\]]+)?\\]\\]`, "g");
+
+    for (const entityType of getTypeDirectories(dataDir)) {
+      const typeDir = join(dataDir, entityType);
+      for (const fileName of getEntityFiles(typeDir)) {
+         const filePath = join(typeDir, fileName);
+         if (filePath === sourceAbs || filePath === targetAbs) continue;
+
+         const raw = readFileSync(filePath, "utf-8");
+         if (!raw.includes(oldName)) continue;
+
+         let changed = false;
+         const newRaw = raw.replace(linkRegex, (match, alias) => {
+            changed = true;
+            return `[[${newName}${alias || ""}]]`;
+         });
+
+         if (changed) {
+            writeFileSync(filePath, newRaw, "utf-8");
+            referencesRewritten++;
+         }
+      }
+    }
+
+    // 5. Delete Source (always)
+    rmSync(sourceAbs, { force: true });
+
+    return JSON.stringify({
+       success: true,
+       action: "merge-entities",
+       message: `Merged ${oldName} into ${newName}. Rewrote ${referencesRewritten} files.`,
+       warning: "Blind combine completed. Deduplication was NOT performed. Please review the newly merged file via 'read' and clean up duplicate sections/evidence via 'write-entity'.",
+       referencesRewritten
+    }, null, 2);
+  }
 
   if (args.action === "upsert-entity") {
     if (!args.upsertData) {
@@ -1219,9 +1378,8 @@ export function kbDoc(args: {
       );
     }
 
-    const allowEmptyBody = args.allowEmptyBody === true;
     const bodyValidation = validateEntityBody(parsed.body, {
-      allowEmptyBody,
+      allowEmptyBody: false,
       minChars: MIN_ENTITY_BODY_CHARS,
     });
 
@@ -1283,7 +1441,6 @@ export function kbDoc(args: {
         bodyChars: bodyValidation.bodyChars,
         minBodyChars: MIN_ENTITY_BODY_CHARS,
         signals: bodyValidation.signals,
-        allowEmptyBody,
       },
       null,
       2,

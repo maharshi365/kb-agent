@@ -1,9 +1,13 @@
 import {
-  kbDoc,
+  kbEntityMerge,
+  kbEntityUpsert,
+  kbEntityWrite,
   kbEntitiesGet,
   kbEntitiesSet,
   kbEntityDelete,
+  kbIndexRegenerate,
   kbIndex,
+  kbVerify,
   kbSearchBatch,
   kbUniverseCreate,
   kbUniverseDelete,
@@ -91,26 +95,57 @@ export const kbManagementTools: Record<string, ToolDefinition> = {
       return kbSearchBatch(args);
     },
   }),
-  kb_doc: tool({
-    description: "Validated KB write/edit tool with strict body checks",
+  kb_entity_upsert: tool({
+    description: "Upsert KB entity evidence and relationships",
     args: {
       universe: tool.schema.string().describe("Universe name"),
-      action: tool.schema
-        .enum(["upsert-entity", "write-entity", "regenerate-index", "verify"])
-        .describe("Document action"),
-      upsertData: tool.schema.string().optional().describe("JSON payload for upsert-entity"),
-      entityData: tool.schema
-        .string()
-        .optional()
-        .describe("JSON payload for write-entity. Must include frontmatter + non-empty body. 'content' is not supported."),
-      path: tool.schema.string().optional().describe("Optional scope path for verify/regenerate-index"),
-      allowEmptyBody: tool.schema
-        .boolean()
-        .optional()
-        .describe("Allow intentionally empty body for write-entity (default false)"),
+      upsertData: tool.schema.string().describe("JSON payload for upsert-entity"),
     },
     async execute(args, _context) {
-      return kbDoc(args);
+      return kbEntityUpsert({ universe: args.universe, upsertData: args.upsertData });
+    },
+  }),
+  kb_entity_write: tool({
+    description: "Write full KB entity file with strict validation",
+    args: {
+      universe: tool.schema.string().describe("Universe name"),
+      entityData: tool.schema
+        .string()
+        .describe("JSON payload for write-entity. Must include frontmatter + non-empty body. 'content' is not supported."),
+    },
+    async execute(args, _context) {
+      return kbEntityWrite({ universe: args.universe, entityData: args.entityData });
+    },
+  }),
+  kb_entity_merge: tool({
+    description: "Merge two KB entities, rewrite references, and delete source",
+    args: {
+      universe: tool.schema.string().describe("Universe name"),
+      sourcePath: tool.schema.string().describe("Source entity path (merged from)"),
+      targetPath: tool.schema.string().describe("Target entity path (merged into)"),
+    },
+    async execute(args, _context) {
+      return kbEntityMerge({ universe: args.universe, sourcePath: args.sourcePath, targetPath: args.targetPath });
+    },
+  }),
+  kb_verify: tool({
+    description: "Verify KB entities in scope",
+    args: {
+      universe: tool.schema.string().describe("Universe name"),
+      path: tool.schema.string().optional().describe("Optional file or folder scope"),
+    },
+    async execute(args, _context) {
+      return kbVerify({ universe: args.universe, path: args.path });
+    },
+  }),
+  kb_index_regenerate: tool({
+    description: "Regenerate KB index files in scope",
+    args: {
+      universe: tool.schema.string().describe("Universe name"),
+      path: tool.schema.string().optional().describe("Optional folder scope for one entity type"),
+    },
+    async execute(args, _context) {
+      return kbIndexRegenerate({ universe: args.universe, path: args.path });
     },
   }),
 };

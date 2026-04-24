@@ -8,7 +8,7 @@ Purpose:
 Rules:
 - Use kb_search_batch for lookups before broad reads.
 - Prefer _data for retrieval and _raw only when KB evidence is thin.
-- Prefer kb_doc upsert-entity for additive fixes.
+- Prefer kb_entity_upsert for additive fixes.
 - If write-entity is used, entityData must include frontmatter + body (never content).
 - Never claim fixes were applied unless at least one write succeeded and verify/readback confirms non-empty body.
 - Report attempted/succeeded/failed counts for write actions.

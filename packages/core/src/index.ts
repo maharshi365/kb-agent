@@ -31,5 +31,9 @@ export {
   kbEntityDelete,
   kbIndex,
   kbSearchBatch,
-  kbDoc,
+  kbEntityUpsert,
+  kbEntityWrite,
+  kbEntityMerge,
+  kbIndexRegenerate,
+  kbVerify,
 } from "./tools/kb-tools";
