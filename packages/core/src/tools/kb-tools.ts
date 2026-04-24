@@ -254,7 +254,11 @@ function renderEntityFrontmatter(entity: ParsedEntity): string {
   ].join("\n");
 }
 
-function validateFrontmatter(entity: ParsedEntity, validTypes: Set<string>): ValidationIssue[] {
+function validateFrontmatter(
+  entity: ParsedEntity,
+  validTypes: Set<string>,
+  validSources: Set<string>,
+): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   if (!entity.entityType.trim()) {
     issues.push({ field: "entityType", message: "entityType is required", severity: "error" });
@@ -272,6 +276,16 @@ function validateFrontmatter(entity: ParsedEntity, validTypes: Set<string>): Val
 
   if (entity.sources.length === 0) {
     issues.push({ field: "sources", message: "sources must include at least one item", severity: "error" });
+  }
+
+  for (const source of entity.sources) {
+    const normalizedSource = source.replace(/^["']+|["']+$/g, '');
+    
+    if (normalizedSource.includes("/") || normalizedSource.includes("\\")) {
+      issues.push({ field: "sources", message: `Source '${source}' must be a flat filename, not a path.`, severity: "error" });
+    } else if (!validSources.has(normalizedSource)) {
+      issues.push({ field: "sources", message: `Source '${source}' does not exist in the _raw directory. Valid sources are raw file names.`, severity: "error" });
+    }
   }
 
   for (const [relatedType, links] of Object.entries(entity.related)) {
@@ -1080,6 +1094,14 @@ function runKbDocAction(args: KbDocActionArgs): string {
   const requiredRelatedByType = buildRequiredRelatedByType(universeEntities);
   const dataDir = join(universeOrMessage.dir, "_data");
 
+  const rawDir = join(universeOrMessage.dir, "_raw");
+  const validSources = new Set<string>();
+  if (existsSync(rawDir)) {
+    for (const name of readdirSync(rawDir)) {
+      validSources.add(name);
+    }
+  }
+
   if (args.action === "merge-entities") {
     if (!args.sourcePath || !args.targetPath) {
       return JSON.stringify({ success: false, code: "E_MERGE_ARGS", error: "sourcePath and targetPath are required for merge-entities" }, null, 2);
@@ -1136,7 +1158,7 @@ function runKbDocAction(args: KbDocActionArgs): string {
 
     // 2. Validate Target Frontmatter
     const issues = [
-      ...validateFrontmatter(targetParsed, validTypes),
+      ...validateFrontmatter(targetParsed, validTypes, validSources),
       ...validateRequiredRelationships(targetParsed, requiredRelatedByType),
     ];
 
@@ -1278,7 +1300,7 @@ function runKbDocAction(args: KbDocActionArgs): string {
     }
 
     const issues = [
-      ...validateFrontmatter(frontmatter, validTypes),
+      ...validateFrontmatter(frontmatter, validTypes, validSources),
       ...validateRequiredRelationships(frontmatter, requiredRelatedByType),
     ];
     const errors = issues.filter((issue) => issue.severity === "error");
@@ -1408,7 +1430,7 @@ function runKbDocAction(args: KbDocActionArgs): string {
     frontmatter.updated = today();
 
     const issues = [
-      ...validateFrontmatter(frontmatter, validTypes),
+      ...validateFrontmatter(frontmatter, validTypes, validSources),
       ...validateRequiredRelationships(frontmatter, requiredRelatedByType),
     ];
     const errors = issues.filter((issue) => issue.severity === "error");
@@ -1600,7 +1622,7 @@ function runKbDocAction(args: KbDocActionArgs): string {
     }
 
     const issues = [
-      ...validateFrontmatter(parsed, validTypes),
+      ...validateFrontmatter(parsed, validTypes, validSources),
       ...validateRequiredRelationships(parsed, requiredRelatedByType),
     ];
     return {
