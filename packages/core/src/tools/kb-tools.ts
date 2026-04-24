@@ -50,6 +50,16 @@ type IndexedPage = {
   links: string[];
 };
 
+type BodySignals = {
+  hasOverviewHeading: boolean;
+  hasEvidenceHeading: boolean;
+  hasRelationshipsHeading: boolean;
+  hasSourceBlock: boolean;
+  hasWikilink: boolean;
+};
+
+const MIN_ENTITY_BODY_CHARS = 40;
+
 function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -280,6 +290,96 @@ function validateFrontmatter(entity: ParsedEntity, validTypes: Set<string>): Val
   }
 
   return issues;
+}
+
+function buildRequiredRelatedByType(
+  entities: Array<{ name: string; requiredEntities?: string[] }>,
+): Map<string, string[]> {
+  const requiredMap = new Map<string, string[]>();
+
+  for (const entity of entities) {
+    requiredMap.set(entity.name, unique(entity.requiredEntities ?? []));
+  }
+
+  return requiredMap;
+}
+
+function validateRequiredRelationships(
+  entity: ParsedEntity,
+  requiredRelatedByType: Map<string, string[]>,
+): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const requiredTypes = requiredRelatedByType.get(entity.entityType) ?? [];
+
+  for (const requiredType of requiredTypes) {
+    const links = entity.related[requiredType] ?? [];
+    if (links.length === 0) {
+      issues.push({
+        field: `related.${requiredType}`,
+        message: `At least one relationship is required for '${requiredType}' by schema for entityType '${entity.entityType}'.`,
+        severity: "error",
+      });
+    }
+  }
+
+  return issues;
+}
+
+function detectBodySignals(body: string): BodySignals {
+  return {
+    hasOverviewHeading: /(^|\n)##\s+Overview(\s|$)/i.test(body),
+    hasEvidenceHeading: /(^|\n)##\s+Evidence(\s|$)/i.test(body),
+    hasRelationshipsHeading: /(^|\n)##\s+Relationships(\s|$)/i.test(body),
+    hasSourceBlock: /(^|\n)>\s*Source:/i.test(body),
+    hasWikilink: /\[\[[^\]]+\]\]/.test(body),
+  };
+}
+
+function validateEntityBody(
+  body: string,
+  options: { allowEmptyBody: boolean; minChars: number },
+): { errors: ValidationIssue[]; signals: BodySignals; bodyChars: number } {
+  const trimmed = body.trim();
+  const signals = detectBodySignals(trimmed);
+  const errors: ValidationIssue[] = [];
+
+  if (trimmed.length === 0 && !options.allowEmptyBody) {
+    errors.push({
+      field: "body",
+      message: "Entity body is required and cannot be empty",
+      severity: "error",
+    });
+  }
+
+  if (trimmed.length > 0 && trimmed.length < options.minChars && !options.allowEmptyBody) {
+    errors.push({
+      field: "body",
+      message: `Entity body is too short (${trimmed.length} chars). Minimum is ${options.minChars}.`,
+      severity: "error",
+    });
+  }
+
+  if (
+    trimmed.length > 0 &&
+    !signals.hasOverviewHeading &&
+    !signals.hasEvidenceHeading &&
+    !signals.hasRelationshipsHeading &&
+    !signals.hasSourceBlock &&
+    !signals.hasWikilink &&
+    !options.allowEmptyBody
+  ) {
+    errors.push({
+      field: "body",
+      message: "Entity body must contain meaningful structure (heading, evidence/source block, or wikilink).",
+      severity: "error",
+    });
+  }
+
+  return {
+    errors,
+    signals,
+    bodyChars: trimmed.length,
+  };
 }
 
 function getTypeDirectories(dataDir: string): string[] {
@@ -914,6 +1014,7 @@ export function kbDoc(args: {
   upsertData?: string;
   entityData?: string;
   path?: string;
+  allowEmptyBody?: boolean;
 }): string {
   const universeName = args.universe.trim();
   if (!universeName) {
@@ -925,7 +1026,9 @@ export function kbDoc(args: {
     return universeOrMessage;
   }
 
-  const validTypes = new Set(universeOrMessage.getEntities().map((entity) => entity.name));
+  const universeEntities = universeOrMessage.getEntities();
+  const validTypes = new Set(universeEntities.map((entity) => entity.name));
+  const requiredRelatedByType = buildRequiredRelatedByType(universeEntities);
   const dataDir = join(universeOrMessage.dir, "_data");
 
   if (args.action === "upsert-entity") {
@@ -1015,7 +1118,10 @@ export function kbDoc(args: {
       frontmatter.related[relatedType] = unique([...(frontmatter.related[relatedType] ?? []), ...links]);
     }
 
-    const issues = validateFrontmatter(frontmatter, validTypes);
+    const issues = [
+      ...validateFrontmatter(frontmatter, validTypes),
+      ...validateRequiredRelationships(frontmatter, requiredRelatedByType),
+    ];
     const errors = issues.filter((issue) => issue.severity === "error");
     const warnings = issues.filter((issue) => issue.severity === "warning");
 
@@ -1059,14 +1165,81 @@ export function kbDoc(args: {
 
   if (args.action === "write-entity") {
     if (!args.entityData) {
-      return JSON.stringify({ success: false, error: "entityData is required" }, null, 2);
+      return JSON.stringify(
+        { success: false, code: "E_ENTITY_DATA_REQUIRED", error: "entityData is required" },
+        null,
+        2,
+      );
     }
 
-    let parsed: { frontmatter: ParsedEntity; body?: string };
+    let parsed: { frontmatter?: ParsedEntity; body?: string; content?: unknown };
     try {
-      parsed = JSON.parse(args.entityData) as { frontmatter: ParsedEntity; body?: string };
+      parsed = JSON.parse(args.entityData) as { frontmatter?: ParsedEntity; body?: string; content?: unknown };
     } catch {
-      return JSON.stringify({ success: false, error: "entityData must be valid JSON" }, null, 2);
+      return JSON.stringify(
+        { success: false, code: "E_ENTITY_DATA_INVALID_JSON", error: "entityData must be valid JSON" },
+        null,
+        2,
+      );
+    }
+
+    if (!parsed.frontmatter || typeof parsed.frontmatter !== "object") {
+      return JSON.stringify(
+        {
+          success: false,
+          code: "E_ENTITY_DATA_SHAPE",
+          error: "entityData must include a frontmatter object",
+        },
+        null,
+        2,
+      );
+    }
+
+    if ("content" in parsed && typeof parsed.body !== "string") {
+      return JSON.stringify(
+        {
+          success: false,
+          code: "E_UNSUPPORTED_FIELD",
+          error: "Unsupported field 'content' for write-entity. Use 'body' instead.",
+        },
+        null,
+        2,
+      );
+    }
+
+    if (typeof parsed.body !== "string") {
+      return JSON.stringify(
+        {
+          success: false,
+          code: "E_BODY_MISSING",
+          error: "entityData.body is required for write-entity",
+        },
+        null,
+        2,
+      );
+    }
+
+    const allowEmptyBody = args.allowEmptyBody === true;
+    const bodyValidation = validateEntityBody(parsed.body, {
+      allowEmptyBody,
+      minChars: MIN_ENTITY_BODY_CHARS,
+    });
+
+    if (bodyValidation.errors.length > 0) {
+      return JSON.stringify(
+        {
+          success: false,
+          action: "write-entity",
+          code: bodyValidation.bodyChars === 0 ? "E_BODY_EMPTY" : "E_BODY_INVALID",
+          error: "Body validation failed",
+          errors: bodyValidation.errors,
+          bodyChars: bodyValidation.bodyChars,
+          minBodyChars: MIN_ENTITY_BODY_CHARS,
+          signals: bodyValidation.signals,
+        },
+        null,
+        2,
+      );
     }
 
     const frontmatter = parsed.frontmatter;
@@ -1076,7 +1249,10 @@ export function kbDoc(args: {
     frontmatter.created = frontmatter.created || today();
     frontmatter.updated = today();
 
-    const issues = validateFrontmatter(frontmatter, validTypes);
+    const issues = [
+      ...validateFrontmatter(frontmatter, validTypes),
+      ...validateRequiredRelationships(frontmatter, requiredRelatedByType),
+    ];
     const errors = issues.filter((issue) => issue.severity === "error");
     const warnings = issues.filter((issue) => issue.severity === "warning");
 
@@ -1104,6 +1280,10 @@ export function kbDoc(args: {
         success: true,
         action: "write-entity",
         path: relative(universeOrMessage.dir, entityPath).replace(/\\/g, "/"),
+        bodyChars: bodyValidation.bodyChars,
+        minBodyChars: MIN_ENTITY_BODY_CHARS,
+        signals: bodyValidation.signals,
+        allowEmptyBody,
       },
       null,
       2,
@@ -1262,7 +1442,10 @@ export function kbDoc(args: {
       };
     }
 
-    const issues = validateFrontmatter(parsed, validTypes);
+    const issues = [
+      ...validateFrontmatter(parsed, validTypes),
+      ...validateRequiredRelationships(parsed, requiredRelatedByType),
+    ];
     return {
       file: relativePath,
       valid: issues.every((issue) => issue.severity !== "error"),

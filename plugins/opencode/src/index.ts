@@ -3,7 +3,14 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Plugin } from "@opencode-ai/plugin";
 import { universeManager } from "@kb/core";
-import { buildKbAgentDef } from "./agents/kb-agent";
+import {
+  buildKbAgentDef,
+  buildKbAuditorDef,
+  buildKbHealerDef,
+  buildKbProcessorDef,
+  buildKbResearcherDef,
+  buildKbReviewerDef,
+} from "./agents/kb-agent";
 import { kbManagementTools } from "./tools/kb-management";
 
 type PluginConfig = {
@@ -81,6 +88,11 @@ const server: Plugin = async () => {
       const agentDefs = config.agent ?? {};
 
       agentDefs["kb-agent"] = buildKbAgentDef();
+      agentDefs["kb-researcher"] = buildKbResearcherDef();
+      agentDefs["kb-processor"] = buildKbProcessorDef();
+      agentDefs["kb-reviewer"] = buildKbReviewerDef();
+      agentDefs["kb-healer"] = buildKbHealerDef();
+      agentDefs["kb-auditor"] = buildKbAuditorDef();
       config.agent = agentDefs;
     },
     tool: kbManagementTools,

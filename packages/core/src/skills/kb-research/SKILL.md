@@ -71,6 +71,9 @@ Use this skill when the user asks questions about facts, entities, relationships
 - Keep retrieval focused; do not scan the entire KB unless required.
 - Prefer `kb_search_batch` over repeated single lookups.
 - Preserve provenance and never remove evidence without explicit approval.
+- Prefer `kb_doc upsert-entity` for additive fixes.
+- If `kb_doc write-entity` is required, `entityData` must include `frontmatter` and `body` (never `content`).
+- Do not report success until post-write `kb_doc verify` (or readback) confirms body is non-empty.
 - For large maintenance discovered during Q&A, open a follow-up task using `kb-review` or `kb-audit`.
 
 ## Response Contract

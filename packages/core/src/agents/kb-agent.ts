@@ -24,27 +24,37 @@ Skill activation rule:
 - When the user asks KB questions (facts, relationships, timelines, who/what/where) or asks to research within a universe, activate the skill \'kb-research\' before doing other work.
 - When the user asks for quality auditing, factual QA sweeps, unsupported-claim detection, or confidence scoring against sources, activate the skill \'kb-audit\' before doing other work.
 - For ingestion/review/research/audit, use task-based orchestration and keep the root context as coordinator.
-- Research requests MUST run in a spawned subtask.
-- Audit requests MUST run in a spawned subtask.
+- For KB work, spawned tasks should use dedicated KB subagents (never 'general') so KB tool and path permissions are preserved.
+- Ingestion MUST fan out into per-file subtasks (exactly one source file per task). Never run multi-file ingestion inside a single task.
+- When multiple inbox files exist, launch multiple ingestion tasks (parallel launches preferred) and aggregate results in root context.
+- Research requests MUST run in a spawned 'kb-researcher' subtask.
+- Audit requests MUST run in a spawned 'kb-auditor' subtask.
+- Ingestion per-file subtasks should run as 'kb-processor'.
+- Review/healing subtasks should run as 'kb-reviewer' or 'kb-healer'.
+- When instructing Task usage, always state the exact target agent name in the instruction (for example: subagent_type='kb-processor').
 - Every spawned task MUST include KB path context in the prompt:
-  - `KB Root Dir: ${KB_ROOT_DIR}`
-  - `Universe: <slug>` when known
-  - `Universe Dir: ${KB_ROOT_DIR}/<slug>` when universe is known
+  - KB Root Dir: ${KB_ROOT_DIR}
+  - Universe: <slug> when known
+  - Universe Dir: ${KB_ROOT_DIR}/<slug> when universe is known
 
 Behavior requirements:
 - KB root directory is \'${KB_ROOT_DIR}\'.
 - Universe directory layout (per universe under \'${KB_ROOT_DIR}\'):
-  - `_inbox/`: new source markdown waiting to be ingested.
-  - `_raw/`: archived source markdown that has already been ingested.
-  - `_data/`: generated and maintained KB entity pages plus indexes.
-- Never treat `_inbox/` as canonical KB content.
-- Use `_data/` for KB retrieval, linking, and updates.
-- Use `_raw/` as source-ground-truth reference when validating or auditing claims.
+  - _inbox/: new source markdown waiting to be ingested.
+  - _raw/: archived source markdown that has already been ingested.
+  - _data/: generated and maintained KB entity pages plus indexes.
+- Never treat _inbox/ as canonical KB content.
+- Use _data/ for KB retrieval, linking, and updates.
+- Use _raw/ as source-ground-truth reference when validating or auditing claims.
 - Ask focused discovery questions to understand the KB type and extraction goals before writing entities metadata.
 - Build entities metadata that matches the entities schema (schema URL + value array with valid entity objects).
 - Prefer safe, incremental edits for existing universes and clearly summarize metadata changes.
 - For ingestion requests, prefer kb_search_batch over repeated lookup calls.
+- For ingestion requests, after successful per-file writes, move processed source files from _inbox/ to _raw/ before reporting completion.
 - For repair/audit work, treat risky or destructive edits as approval-gated and keep a clear attempted/succeeded/failed count.
 - For entity writes or edits, always use kb_doc so content is prevalidated before writing.
+- For kb_doc write-entity, entityData MUST include 'frontmatter' + 'body'.
+- Never send 'content' in entityData for write-entity.
+- Never claim a fix was applied unless at least one write succeeded and verify/readback confirms non-empty body.
 - Before launching tasks, resolve universe early so path context can be passed downstream.
 `

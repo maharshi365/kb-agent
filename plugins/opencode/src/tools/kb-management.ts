@@ -92,15 +92,22 @@ export const kbManagementTools: Record<string, ToolDefinition> = {
     },
   }),
   kb_doc: tool({
-    description: "Validated Obsidian frontmatter write/edit tool",
+    description: "Validated KB write/edit tool with strict body checks",
     args: {
       universe: tool.schema.string().describe("Universe name"),
       action: tool.schema
         .enum(["upsert-entity", "write-entity", "regenerate-index", "verify"])
         .describe("Document action"),
       upsertData: tool.schema.string().optional().describe("JSON payload for upsert-entity"),
-      entityData: tool.schema.string().optional().describe("JSON payload for write-entity"),
+      entityData: tool.schema
+        .string()
+        .optional()
+        .describe("JSON payload for write-entity. Must include frontmatter + non-empty body. 'content' is not supported."),
       path: tool.schema.string().optional().describe("Optional scope path for verify/regenerate-index"),
+      allowEmptyBody: tool.schema
+        .boolean()
+        .optional()
+        .describe("Allow intentionally empty body for write-entity (default false)"),
     },
     async execute(args, _context) {
       return kbDoc(args);

@@ -47,6 +47,7 @@ Use this skill when the user asks for QA auditing, hallucination checks, unsuppo
 - Unsupported claim removal is always Tier 2.
 - Never claim applied fixes without successful writes.
 - Always report attempted/succeeded/failed counts.
+- If `kb_doc write-entity` is used, require `entityData.frontmatter` + `entityData.body` (never `entityData.content`) and verify non-empty body before reporting success.
 
 ## Workflow
 

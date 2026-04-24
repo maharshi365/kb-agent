@@ -81,6 +81,8 @@ Do not skip ahead unless the earlier stage reports zero issues.
 
 - Prefer minimal, reversible edits first.
 - Keep frontmatter valid via `kb_doc` writes.
+- If using `kb_doc` write-entity, send `entityData.frontmatter` + `entityData.body` only (never `entityData.content`).
+- Require post-write `kb_doc verify` for touched files before claiming a fix succeeded.
 - Preserve evidence and source provenance while merging.
 - Never delete first: create or update replacement content and links before deleting old pages.
 - If an item cannot be safely auto-fixed, report it explicitly with reason.
